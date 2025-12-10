@@ -6,10 +6,11 @@ from typing import List, Optional
 @dataclass
 class Config:
 
-    model: str = "black-forest-labs/FLUX.1-dev"
-    output_dir: str = "/dataoutput/swin_adapter_v1"
+    model: str = "./black-forest-labs/FLUX.1-dev"
+    output_dir: str = "/data/fength/swin_adapter_v1/outputs/"
     mixed_precision: str = "bf16"
-    dataset_name: str = "HuiZhang0812/CreatiDesign_dataset"
+    # dataset_name: str = "HuiZhang0812/CreatiDesign_dataset"
+    dataset_name: str = "/home/fength/.cache/huggingface/datasets/HuiZhang0812___creati_design_benchmark/default/0.0.0/63fb381622f01b2f3ee11e56f0a1a017d52a843d/"
     
     # Flux 推荐 1024
     resolution: int = 1024
@@ -23,7 +24,7 @@ class Config:
     
     num_epochs: int = 10
     batch_size: int = 1
-    gradient_accumulation_steps: int = 4
+    gradient_accumulation_steps: int = 10000
     learning_rate: float = 1e-4
     weight_decay: float = 1e-2
     save_steps: int = 500

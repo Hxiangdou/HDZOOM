@@ -86,19 +86,32 @@ def adjust_and_normalize_bboxes(bboxes, orig_width, orig_height):
     return normalized_bboxes
 
 def img_transforms(image, height=512, width=512):
+    # 强制转换为RGB
+    if not isinstance(image, Image.Image):
+        image = Image.fromarray(image)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+        
     transform = transforms.Compose(
         [
             transforms.Resize(
                 (height, width), interpolation=transforms.InterpolationMode.BILINEAR  
             ),
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
+            # transforms.Normalize([0.5], [0.5]),
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         ]
     )
     image_transformed = transform(image)
     return image_transformed
 
 def mask_transforms(mask, height=512, width=512):
+    # 强制转换为 L (灰度)
+    if not isinstance(mask, Image.Image):
+        mask = Image.fromarray(mask)
+    if mask.mode != "L":
+        mask = mask.convert("L")
+        
     transform = transforms.Compose(
         [
             transforms.Resize(
