@@ -6274,6 +6274,95 @@ class PAGIdentitySanaLinearAttnProcessor2_0:
         return hidden_states
 
 
+# =========================================================================
+#  CreatiDesign Optimization: Inverted Swin Post-Processor Injection
+# =========================================================================
+
+
+#  WindowAttention, SwinTransformerBlock, PatchExpand, PatchMerging, BasicLayer, InvertedSwinModule]
+
+from HDZoomer.HDZoomer import InvertedSwinModule  
+
+class FluxInvertedSwinPostProcessor(nn.Module):
+    r"""
+    A wrapper processor that runs the base processor (e.g., DesignFluxAttnProcessor2_0) first,
+    and then passes the image hidden states through an InvertedSwinModule.
+    """
+    def __init__(self, base_processor, in_dim, input_resolution, depths, num_heads, window_size):
+        super().__init__()
+        # 1. 保存原有的 Processor 以复用其 Attention 计算逻辑
+        self.base_processor = base_processor
+        
+        # 2. 初始化你的 Swin 模块
+        self.swin_module = InvertedSwinModule(
+            in_dim=in_dim,
+            input_resolution=input_resolution,
+            depths=depths,
+            num_heads=num_heads,
+            window_size=window_size
+        )
+        self.input_resolution = input_resolution
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        image_rotary_emb: Optional[torch.Tensor] = None,
+        **kwargs
+    ) -> torch.Tensor:
+        
+        # 1. 首先执行原本的 Attention 计算
+        # DesignFluxAttnProcessor2_0 的返回值可能是 3 个或 4 个元素，取决于是否是 Double Block
+        output_tuple = self.base_processor(
+            attn,
+            hidden_states,
+            encoder_hidden_states,
+            attention_mask,
+            image_rotary_emb,
+            **kwargs
+        )
+
+        # 2. 解析返回值
+        # DesignFluxAttnProcessor2_0 的返回签名如下:
+        # Double Block: (hidden_states, encoder_hidden_states, subject_hidden_states, object_bbox_hidden_states)
+        # Single Block: (hidden_states, subject_hidden_states, object_bbox_hidden_states)
+        # 共同点是：第一个元素始终是 Image Hidden States (我们想处理的对象)
+        
+        img_hidden_states = output_tuple[0]
+        rest_outputs = output_tuple[1:]
+
+        # 3. 准备 Swin 输入 (B, L, C) -> (B, H, W, C)
+        B, L, C = img_hidden_states.shape
+        H, W = self.input_resolution
+        
+        # 简单的形状校验
+        if L != H * W:
+             # 如果序列长度不匹配，可能需要跳过 Swin 或者动态调整
+             # 这里为了安全，如果不匹配直接返回原结果
+             return output_tuple
+
+        img_spatial = img_hidden_states.view(B, H, W, C)
+
+        # 4. 通过 InvertedSwinModule 进行后处理
+        # 你的模块输入输出维度一致，且带有残差连接 (Inverted U-Net结构)
+        img_processed = self.swin_module(img_spatial)
+
+        # 5. 还原形状 (B, H, W, C) -> (B, L, C)
+        img_hidden_states_new = img_processed.view(B, L, C)
+
+        # 6. 重新组合返回值
+        return (img_hidden_states_new,) + rest_outputs
+    
+    def to(self, *args, **kwargs):
+        # 确保子模块也能被移动到正确的设备
+        super().to(*args, **kwargs)
+        # base_processor 通常不是 nn.Module，或者是没有 parameters 的普通类，但如果有，也要处理
+        if isinstance(self.base_processor, nn.Module):
+            self.base_processor.to(*args, **kwargs)
+        return self
+
 ADDED_KV_ATTENTION_PROCESSORS = (
     AttnAddedKVProcessor,
     SlicedAttnAddedKVProcessor,

@@ -124,16 +124,20 @@ class DesignDataset(Dataset):
         neg_condition_image = 'same',
         background_color = 'gray',
         use_bucket=True,
-        box_confidence_th = 0.0
+        box_confidence_th = 0.0,
+        split="train",
     ):
 
 
         print(f"Loading dataset from Hugging Face: {dataset_name}")
         
-        self.dataset = load_dataset(dataset_name, split="test")
+        self.dataset = load_dataset(dataset_name, split=split)
+        # num_samples = 20000 
+        # dataset = dataset
+        
         print(f"Loaded {len(self.dataset)} samples") 
-        from IPython.core.debugger import set_trace 
-        set_trace()
+        # from IPython.core.debugger import set_trace 
+        # set_trace()
         self.max_boxes_per_image = max_boxes_per_image
         self.resolution = resolution
         self.condition_resolution=condition_resolution

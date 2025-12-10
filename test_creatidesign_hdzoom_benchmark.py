@@ -14,7 +14,11 @@ from modules.flux.transformer_flux_creatidesign import FluxTransformer2DModel
 from pipeline.pipeline_flux_creatidesign import FluxPipeline
 import json
 from huggingface_hub import snapshot_download
-
+from modules.flux.attention_processor_flux_creatidesign import (
+    FluxInvertedSwinPostProcessor, 
+    Attention,
+    DesignFluxAttnProcessor2_0 # 或者是模型当前使用的 Processor 类
+)
 # from datasets import load_dataset
 
 if __name__ == "__main__":
@@ -27,19 +31,21 @@ if __name__ == "__main__":
     use_bucket = True
     condition_resolution_scale_ratio=0.5
     
-    benchmark_repo = 'HuiZhang0812/CreatiDesign_benchmark' #  huggingface repo of benchmark
-    
+    # benchmark_repo = 'HuiZhang0812/CreatiDesign_benchmark' #  huggingface repo of benchmark
+    benchmark_repo = '/home/fength/.cache/huggingface/datasets/HuiZhang0812___creati_design_benchmark/default/0.0.0/63fb381622f01b2f3ee11e56f0a1a017d52a843d/'
     datasets = DesignDataset(dataset_name=benchmark_repo,
                              resolution=resolution,
                              condition_resolution=condition_resolution,
                              neg_condition_image =neg_condition_image,
                              background_color=background_color,
                              use_bucket=use_bucket,
-                             condition_resolution_scale_ratio=condition_resolution_scale_ratio
+                             condition_resolution_scale_ratio=condition_resolution_scale_ratio,
+                             split="test"
                              )
     test_dataloader = DataLoader(datasets, batch_size=1, shuffle=False, num_workers=4,collate_fn=collate_fn)
 
     
+    # model_path = "/data/fength/FLUX.1-dev/"
     model_path = "black-forest-labs/FLUX.1-dev"
 
     ckpt_repo = "HuiZhang0812/CreatiDesign" # huggingface repo of ckpt
@@ -71,6 +77,50 @@ if __name__ == "__main__":
     transformer = transformer.to(dtype=torch.bfloat16)
 
     pipe = FluxPipeline.from_pretrained(model_path, transformer=transformer,torch_dtype=torch.bfloat16)
+    
+    # Latent 分辨率 (Flux 经过 VAE 8x 和 Patch 2x，总共缩小 16 倍)
+    latent_resolution = (resolution // 16, resolution // 16)  # 结果为 (64, 64)
+    
+    for name, module in pipe.transformer.named_modules():
+        # 仅针对 SingleTransformerBlock 中的 Attention (自注意力)
+        if "single_transformer_blocks" in name and isinstance(module, Attention):
+        
+            current_processor = module.processor
+            
+            dim = module.out_dim if module.out_dim is not None else module.query_dim
+            # 对于 Flux.1-dev，这里通常是 3072
+            dim = min(dim, 192)  # 确保不超过 4096
+            window_size = 8
+            
+            # 检查分辨率是否匹配窗口
+            if latent_resolution[0] % window_size != 0 or latent_resolution[1] % window_size != 0:
+                print(f"警告: 分辨率 {latent_resolution} 不能被 window_size {window_size} 整除，可能会报错。")
+            
+            swin_num_heads = module.heads  
+            if dim % swin_num_heads != 0:
+                raise ValueError(f"维度 {dim} 无法被头数 {swin_num_heads} 整除")
+
+            # E. 设定深度
+            depths = [2, 2, 2, 2]  # 根据显存情况调整
+
+            # print(f"正在注入层: {name}")
+            # print(f"  - Dim: {dim}")
+            # print(f"  - Resolution: {latent_resolution}")
+            
+            # --- 实例化并替换 ---
+            
+            # 实例化你的 Wrapper Processor
+            swin_wrapper = FluxInvertedSwinPostProcessor(
+                base_processor=current_processor,
+                in_dim=dim,
+                input_resolution=latent_resolution,
+                depths=depths,
+                num_heads=swin_num_heads,
+                window_size=window_size
+            ).to(pipe.device, dtype=pipe.dtype)
+            # print(f"  - 使用的 Processor: {swin_wrapper.__class__.__name__}")
+            # 替换
+            module.set_processor(swin_wrapper)
     pipe = pipe.to("cuda")
     
     seed=42
