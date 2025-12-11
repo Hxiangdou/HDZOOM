@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     
     # model_path = "/data/fength/FLUX.1-dev/"
-    model_path = "black-forest-labs/FLUX.1-dev"
+    model_path = "./black-forest-labs/FLUX.1-dev"
 
     ckpt_repo = "HuiZhang0812/CreatiDesign" # huggingface repo of ckpt
 
