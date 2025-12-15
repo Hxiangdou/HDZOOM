@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-export CUDA_VISIBLE_DEVICES="2,1"
+export CUDA_VISIBLE_DEVICES="2,3"
 
 
 NUM_GPUS=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)

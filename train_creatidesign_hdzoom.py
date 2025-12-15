@@ -34,7 +34,7 @@ from diffusers.optimization import get_scheduler
 # 自定义模块
 from modules.flux.transformer_flux_creatidesign import FluxTransformer2DModel
 from pipeline.pipeline_flux_creatidesign import FluxPipeline
-from modules.flux.attention_processor_flux_creatidesign import (
+from modules.flux.attention_processor_flux_creatidesign_fix import (
     FluxInvertedSwinPostProcessor, 
     Attention
 )
@@ -124,13 +124,16 @@ def main():
     
     # 3. 注入 Swin Adapter
     latent_resolution = config.latent_resolution
-    
+    index = 0
+    select_layers = [0, 2, 4]  # 在这些层后插入 Swin Adapter
     for name, module in pipe.transformer.named_modules():
         if "single_transformer_blocks" in name and isinstance(module, Attention):
             current_processor = module.processor
             dim = module.out_dim if module.out_dim is not None else module.query_dim
             dim = min(dim, 192)
-            
+            if index not in select_layers:
+                index += 1
+                continue
             swin_wrapper = FluxInvertedSwinPostProcessor(
                 base_processor=current_processor,
                 in_dim=dim,
@@ -143,7 +146,43 @@ def main():
             module.set_processor(swin_wrapper)
     
     # pipe.transformer.enable_gradient_checkpointing()
-    # pipe.enable_gradient_checkpointing()
+    # pipe._set_gradient_checkpointing(True)
+    
+    # ===================================
+    # transformer = pipe.transformer
+
+    # # 2. 方式1：通用梯度检查点设置（兼容绝大多数自定义Transformer）
+    # transformer.gradient_checkpointing = True
+    # transformer.config.gradient_checkpointing = True  # 同步更新config
+
+    # # 3. 方式2：调用PyTorch原生API（兜底方案，优先级更高）
+    # def set_gradient_checkpointing(model, enable=True):
+    #     for module in model.modules():
+    #         if hasattr(module, "gradient_checkpointing"):
+    #             module.gradient_checkpointing = enable
+    #         # 兼容HuggingFace的梯度检查点标记
+    #         if hasattr(module, "_set_gradient_checkpointing"):
+    #             # 自定义Transformer可能参数是value而非enable，适配两种情况
+    #             try:
+    #                 module._set_gradient_checkpointing(value=enable)
+    #             except TypeError:
+    #                 try:
+    #                     module._set_gradient_checkpointing(enable=enable)
+    #                 except:
+    #                     pass
+    #     # 启用PyTorch梯度检查点
+    #     if enable:
+    #         model.gradient_checkpointing_enable()  # HF模型通用方法
+    #     else:
+    #         model.gradient_checkpointing_disable()
+
+    # # 调用上述函数给自定义Transformer设置梯度检查点
+    # set_gradient_checkpointing(transformer, enable=True)
+    
+    
+    
+    
+    # ===================================
     # 4. 冻结与解冻
     pipe.transformer.requires_grad_(False)
     pipe.vae.requires_grad_(False)
@@ -282,12 +321,15 @@ def main():
                         device=accelerator.device,
                         max_sequence_length=512
                     )
-
+                    # pipe.text_encoder.to("cpu")
+                    # pipe.text_encoder_2.to("cpu")
+                    # torch.cuda.empty_cache()
                     # 6. Encode Object Captions (For Layout Control)
                     # objects_caption is a list of B lists. We need to encode them.
                     max_boxes = config.max_boxes_per_image if hasattr(config, 'max_boxes_per_image') else 10
                     bbox_text_embeddings = torch.zeros(B, max_boxes, 512, 4096, device=accelerator.device, dtype=config.torch_dtype)
                     
+
                     for i in range(B):
                         caps = objects_caption[i] # List of strings
                         if len(caps) > 0:

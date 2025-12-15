@@ -14,7 +14,7 @@ class Config:
     # dataset_name: str = "/home/fength/.cache/huggingface/datasets/HuiZhang0812___creati_design_benchmark/default/0.0.0/63fb381622f01b2f3ee11e56f0a1a017d52a843d/"
     
     # Flux 推荐 1024
-    resolution: int = 1024
+    resolution: int = 256
     condition_resolution: int = 512
     neg_condition_image: str = "same"
     background_color: str = "gray"
