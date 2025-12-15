@@ -14,3 +14,6 @@ editdistance
 paddleocr
 datasets
 huggingface_hub
+seaborn
+scipy
+einops

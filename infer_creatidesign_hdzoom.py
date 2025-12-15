@@ -157,31 +157,7 @@ def prepare_single_input(
     
     return batch
 
-if __name__ == "__main__":
-    
-    model_path = "./black-forest-labs/FLUX.1-dev" # 基础模型
-    ckpt_repo = "HuiZhang0812/CreatiDesign"     # Checkpoint 仓库
-
-    resolution = 1024 # 生成图像分辨率
-    seed = 42
-    num_inference_steps = 28
-    guidance_scale = 1.0
-    true_cfg_scale = 3.5
-    
-    my_condition_image_path = "/home/fength/CreatiDesign/test_data/infer-removebg-preview_condition.jpg" 
-    mask_path = "/home/fength/CreatiDesign/test_data/infer-removebg-preview_mask.jpg"
-    my_prompt = "A wooden table with Text:\"What Can I SAY\", in a bright room."
-    
-    # 布局[x1, y1, x2, y2] 坐标范围 0.0 到 1.0
-    my_layout = [
-        {"bbox": [0.1, 0.1, 0.8, 0.2], "prompt": "Text:\"What Can I SAY\""},
-    ]
-    
-    output_dir = "outputs/custom_inference"
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    weight_dtype = torch.bfloat16
-    
+def hdzoom_load_model(model_path, ckpt_repo, weight_dtype, resolution=1024):
     print(f"Loading model checkpoint from {ckpt_repo}...")
     ckpt_path = snapshot_download(
         repo_id=ckpt_repo,
@@ -260,6 +236,28 @@ if __name__ == "__main__":
             # print(f"  - 使用的 Processor: {swin_wrapper.__class__.__name__}")
             # 替换
             module.set_processor(swin_wrapper)
+    return pipe
+
+def hdzoom_inference(
+    model_path, 
+    ckpt_repo, 
+    resolution, 
+    seed, 
+    num_inference_steps, 
+    guidance_scale, 
+    true_cfg_scale,
+    my_condition_image_path, 
+    mask_path, 
+    my_prompt, 
+    my_layout, 
+    output_dir, 
+    device, 
+    weight_dtype,
+    pipe=None
+):
+    if pipe is None:
+        pipe = hdzoom_load_model(model_path, ckpt_repo, weight_dtype)
+
     pipe = pipe.to(device)
 
     # 准备输入数据
@@ -383,3 +381,31 @@ if __name__ == "__main__":
     vis_save_path = os.path.join(output_dir, "result_vis.jpg")
     vis_image.save(vis_save_path)
     print(f"Visualization saved to {vis_save_path}")
+    return
+
+if __name__ == "__main__":
+    
+    model_path = "./black-forest-labs/FLUX.1-dev" # 基础模型
+    ckpt_repo = "HuiZhang0812/CreatiDesign"     # Checkpoint 仓库
+
+    resolution = 1024 # 生成图像分辨率
+    seed = 42
+    num_inference_steps = 28
+    guidance_scale = 1.0
+    true_cfg_scale = 3.5
+    
+    my_condition_image_path = "/home/fength/CreatiDesign/test_data/infer-removebg-preview_condition.jpg" 
+    mask_path = "/home/fength/CreatiDesign/test_data/infer-removebg-preview_mask.jpg"
+    my_prompt = "A wooden table with Text:\"What Can I SAY\", in a bright room."
+    
+    # 布局[x1, y1, x2, y2] 坐标范围 0.0 到 1.0
+    my_layout = [
+        {"bbox": [0.1, 0.1, 0.8, 0.2], "prompt": "Text:\"What Can I SAY\""},
+    ]
+    
+    output_dir = "outputs/custom_inference"
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    weight_dtype = torch.bfloat16
+    hdzoom_inference(model_path, ckpt_repo, resolution, seed, num_inference_steps, guidance_scale, true_cfg_scale,
+                     my_condition_image_path, mask_path, my_prompt, my_layout, output_dir, device, weight_dtype)
