@@ -22,6 +22,7 @@ echo "   Config File: config.py"
 # --multi_gpu: 启用多卡
 # --num_processes: GPU 总数
 accelerate launch \
+    --config_file deepspeed_config.yaml \
     --num_processes=$NUM_GPUS \
     --mixed_precision=$MIXED_PRECISION \
     --multi_gpu \

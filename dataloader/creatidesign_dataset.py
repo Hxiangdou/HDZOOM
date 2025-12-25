@@ -94,6 +94,8 @@ class DesignDataset(Dataset):
     ):
         print(f"Loading dataset: {dataset_name} (Split: {split})")
         self.dataset = load_dataset(dataset_name, split=split)
+        num_samples = 10000 
+        self.dataset = self.dataset.select(range(num_samples))
         print(f"Loaded {len(self.dataset)} samples")
         
         self.max_boxes = max_boxes_per_image
